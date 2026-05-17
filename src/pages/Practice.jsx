@@ -80,6 +80,7 @@ const Practice = () => {
   const {
     isRecording,
     audioBlob,
+    audioUrl,
     audioLevel,
     recordingTime,
     error: recordingError,
