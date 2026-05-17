@@ -1,0 +1,41 @@
+# Render Blueprint — defines both backend services
+# Deploy via: https://render.com/deploy
+
+services:
+  # ─── Node.js API Gateway ────────────────────────────────
+  - type: web
+    name: accentrix-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: MONGODB_URI
+        sync: false # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AI_SERVICE_URL
+        sync: false # Set to the deployed Python service URL
+      - key: FRONTEND_URL
+        sync: false # Set to the Vercel frontend URL
+
+  # ─── Python AI Service ──────────────────────────────────
+  - type: web
+    name: accentrix-ai-service
+    runtime: python
+    rootDir: ai-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: ANALYSIS_MODE
+        value: mock
+      - key: DEBUG
+        value: "false"

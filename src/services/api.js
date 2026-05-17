@@ -3,7 +3,7 @@
  * Handles all communication with the Node.js backend
  */
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001') + '/api';
 
 // Helper to get auth headers
 const getHeaders = (isFormData = false) => {
