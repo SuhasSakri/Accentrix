@@ -222,6 +222,25 @@ python check_deps.py
 
 ## 🌐 Deployment
 
+### ⚠️ Important: Local vs Deployed Analysis
+
+**Local Development (Full AI Features)**
+- ✅ Real OpenAI Whisper analysis with accurate pronunciation scoring
+- ✅ Runs `ANALYSIS_MODE=whisper` with full AI capabilities
+- ✅ Requires 1GB+ RAM and Whisper model (~140MB)
+- ✅ Perfect for development and testing
+
+**Deployed Version (Demo Mode)**
+- ⚠️ Uses `ANALYSIS_MODE=mock` due to free hosting limitations
+- ⚠️ Pronunciation scores are randomized (for demonstration only)
+- ✅ All other features work perfectly (TTS, recording, UI, auth, progress)
+- ✅ Great for portfolio showcase and UI demonstration
+
+**Why Mock Mode for Deployment?**
+- Free hosting tiers (Render Free) have 512MB RAM limit
+- Whisper AI model requires 1GB+ RAM to run properly
+- Upgrade to Render Starter plan ($7/month) for real AI analysis in production
+
 ### Quick Deploy (Free Tier)
 
 **Frontend** → Vercel
@@ -237,10 +256,11 @@ vercel --prod
 
 ### Deployment Modes
 
-| Mode | Cost | Features |
-|------|------|----------|
-| Demo | Free | TTS voices + Mock analysis |
-| Production | $7/mo | Real Whisper AI analysis |
+| Mode | Cost | AI Analysis | TTS Voices | Best For |
+|------|------|-------------|------------|----------|
+| Local | Free | ✅ Real (Whisper) | ✅ Native | Development & Testing |
+| Demo | Free | ⚠️ Mock (Random) | ✅ Native | Portfolio & UI Demo |
+| Production | $7/mo | ✅ Real (Whisper) | ✅ Native | Real Users |
 
 **Detailed Instructions**: See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
 
