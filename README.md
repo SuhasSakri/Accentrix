@@ -5,6 +5,31 @@ A full-stack web application that leverages AI to help language learners improve
 [![Live Demo](https://img.shields.io/badge/demo-live-success)](https://accentrix.vercel.app)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+**🌐 Live Demo**: [https://accentrix.vercel.app](https://accentrix.vercel.app)
+
+---
+
+## ⚠️ Important Notice - Read Before Using
+
+### Local vs Deployed Version
+
+**🏠 Running Locally (Recommended for Full Experience)**
+- ✅ **Real AI Pronunciation Analysis** using OpenAI Whisper
+- ✅ Accurate scoring based on speech recognition
+- ✅ Educational feedback on mispronounced words
+- ✅ Requires: 1GB+ RAM, Python, Node.js
+- 📖 Setup Guide: See [Getting Started](#getting-started)
+
+**🌐 Live Demo (Portfolio Showcase)**
+- ⚠️ **Mock Pronunciation Scores** (randomized for demo purposes)
+- ⚠️ Limited by free hosting RAM (512MB vs required 1GB+)
+- ✅ **All other features work perfectly**: Native TTS voices, Recording, UI, Authentication, Progress tracking
+- ✅ Perfect for viewing the UI/UX and app functionality
+- 💡 To experience real AI analysis, please run locally
+
+**Why Mock Mode in Demo?**
+OpenAI Whisper model requires 1GB+ RAM. Free hosting tiers (Render Free: 512MB) cannot support it. Upgrading to paid hosting ($7/month) enables real AI analysis.
+
 ---
 
 ## 📋 Table of Contents
@@ -222,24 +247,7 @@ python check_deps.py
 
 ## 🌐 Deployment
 
-### ⚠️ Important: Local vs Deployed Analysis
-
-**Local Development (Full AI Features)**
-- ✅ Real OpenAI Whisper analysis with accurate pronunciation scoring
-- ✅ Runs `ANALYSIS_MODE=whisper` with full AI capabilities
-- ✅ Requires 1GB+ RAM and Whisper model (~140MB)
-- ✅ Perfect for development and testing
-
-**Deployed Version (Demo Mode)**
-- ⚠️ Uses `ANALYSIS_MODE=mock` due to free hosting limitations
-- ⚠️ Pronunciation scores are randomized (for demonstration only)
-- ✅ All other features work perfectly (TTS, recording, UI, auth, progress)
-- ✅ Great for portfolio showcase and UI demonstration
-
-**Why Mock Mode for Deployment?**
-- Free hosting tiers (Render Free) have 512MB RAM limit
-- Whisper AI model requires 1GB+ RAM to run properly
-- Upgrade to Render Starter plan ($7/month) for real AI analysis in production
+**Note**: See [Important Notice](#⚠️-important-notice---read-before-using) at the top for deployment mode differences.
 
 ### Quick Deploy (Free Tier)
 
