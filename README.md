@@ -140,7 +140,7 @@ Overall Score         = 40% Pronunciation + 30% Fluency + 30% Completeness
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/accentrix.git
+   git clone https://github.com/SuhasSakri/accentrix.git
    cd accentrix
    ```
 
@@ -377,7 +377,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Contact
 
-**Project Link**: [https://github.com/yourusername/accentrix](https://github.com/yourusername/accentrix)
+**Project Link**: [https://github.com/SuhasSakri/accentrix](https://github.com/SuhasSakri/accentrix)
 
 **Live Demo**: [https://accentrix.vercel.app](https://accentrix.vercel.app)
 
@@ -396,4 +396,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ by [Your Name](https://github.com/yourusername)
+Made with ❤️ by [Suhas Sakri](https://github.com/SuhasSakri)
