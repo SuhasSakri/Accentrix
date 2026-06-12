@@ -19,7 +19,12 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 
 # AI service temp files
-ai-service/temp_audio/
+ai-service/temp_audio/*
+
+# Test files
+test*.mp3
+test*.wav
+test-*.js
 
 # IDE
 .vscode/
@@ -33,4 +38,5 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Deployment
 .vercel

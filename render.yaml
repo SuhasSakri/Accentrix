@@ -31,11 +31,11 @@ services:
     rootDir: ai-service
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    plan: free
+    plan: starter  # Requires paid plan for Whisper (needs 1GB+ RAM)
     envVars:
       - key: PORT
-        value: "8000"
+        value: "10000"
       - key: ANALYSIS_MODE
-        value: mock
+        value: whisper  # Change to 'mock' for free tier demo
       - key: DEBUG
         value: "false"

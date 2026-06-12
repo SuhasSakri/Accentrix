@@ -374,6 +374,16 @@
   background: rgba(59, 130, 246, 0.15);
 }
 
+.practice__tts-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  font-size: 0.8rem;
+  color: var(--warning-400, #fbbf24);
+  line-height: 1.4;
+}
+
 /* Mic Area */
 .practice__mic-area {
   display: flex;

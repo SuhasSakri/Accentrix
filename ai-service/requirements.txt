@@ -8,3 +8,6 @@ aiofiles>=23.2.0
 httpx>=0.25.0
 openai-whisper
 Levenshtein
+edge-tts>=6.1.0
+scipy
+numpy

@@ -87,6 +87,21 @@ export async function analyzePronunciation(audioBlob, language, referenceText) {
   return await response.json();
 }
 
+export async function fetchTtsAudio(text, language) {
+  const response = await fetch(`${API_BASE}/pronunciation/tts`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ text, language }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'TTS request failed' }));
+    throw new Error(error.error || `TTS error: ${response.status}`);
+  }
+
+  return await response.blob();
+}
+
 export async function getSessions(limit = 20) {
   const response = await fetch(`${API_BASE}/pronunciation/sessions?limit=${limit}`, { headers: getHeaders() });
   if (!response.ok) throw new Error('Failed to fetch sessions');

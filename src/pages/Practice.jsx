@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic, MicOff, Play, Square, RotateCcw, ChevronDown, Volume2, AlertCircle, CheckCircle2, XCircle, TrendingUp, Clock, Wifi, WifiOff } from 'lucide-react';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
-import { analyzePronunciation, recordProgress, checkHealth } from '../services/api';
+import { useSpeechVoices } from '../hooks/useSpeechVoices';
+import { analyzePronunciation, recordProgress, checkHealth, fetchTtsAudio } from '../services/api';
 import './Practice.css';
 
 const SAMPLE_PHRASES = {
@@ -76,6 +77,11 @@ const Practice = () => {
   const [backendStatus, setBackendStatus] = useState('checking'); // checking, online, offline
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customText, setCustomText] = useState('');
+  const [ttsWarning, setTtsWarning] = useState(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const { speak } = useSpeechVoices();
+  const ttsAudioRef = useRef(null);
 
   const {
     isRecording,
@@ -108,6 +114,18 @@ const Practice = () => {
     }).catch(() => {
       setBackendStatus('offline');
     });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        if (ttsAudioRef.current.src?.startsWith('blob:')) {
+          URL.revokeObjectURL(ttsAudioRef.current.src);
+        }
+      }
+      window.speechSynthesis.cancel();
+    };
   }, []);
 
   // When recording stops and we have audio, analyze it
@@ -159,16 +177,48 @@ const Practice = () => {
     }
   };
 
-  const handleListen = () => {
+  const getActiveLangCode = () =>
+    isCustomMode ? LANG_MAP[selectedLanguage] : selectedPhrase.langCode;
+
+  const handleListen = async () => {
     const targetText = isCustomMode ? customText : selectedPhrase.text;
-    if (!targetText) return;
+    if (!targetText?.trim()) return;
 
-    // Use native browser Text-to-Speech
-    const utterance = new SpeechSynthesisUtterance(targetText);
-    utterance.lang = LANG_MAP[selectedLanguage] || 'en-US';
+    const langCode = getActiveLangCode();
+    setTtsWarning(null);
+    setIsSpeaking(true);
 
-    window.speechSynthesis.cancel(); // Stop any current speech
-    window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.cancel();
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      if (ttsAudioRef.current.src?.startsWith('blob:')) {
+        URL.revokeObjectURL(ttsAudioRef.current.src);
+      }
+    }
+
+    try {
+      const blob = await fetchTtsAudio(targetText, langCode);
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      ttsAudioRef.current = audio;
+
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        setTtsWarning('Could not play audio. Using browser voice instead.');
+        speak(targetText, langCode);
+      };
+
+      await audio.play();
+    } catch {
+      setIsSpeaking(false);
+      const { voiceFound } = speak(targetText, langCode);
+      setTtsWarning(
+        voiceFound
+          ? 'Edge TTS unavailable — using your browser voice instead. Start the AI service for native voices.'
+          : `Edge TTS unavailable and no local voice found. Start the AI service (port 8000) and backend (port 3001).`
+      );
+    }
   };
 
   const resetPractice = () => {
@@ -255,6 +305,7 @@ const Practice = () => {
                           setSelectedLanguage(lang.code);
                           setSelectedPhrase(SAMPLE_PHRASES[lang.code][0]);
                           setShowLanguageDropdown(false);
+                          setTtsWarning(null);
                           resetPractice();
                         }}
                       >
@@ -325,10 +376,21 @@ const Practice = () => {
               <p className="practice__target-text">
                 {isCustomMode ? (customText || "Type something to practice...") : selectedPhrase.text}
               </p>
-              <button className="practice__listen-btn" onClick={handleListen} id="listen-btn">
+              <button
+                className="practice__listen-btn"
+                onClick={handleListen}
+                disabled={isSpeaking}
+                id="listen-btn"
+              >
                 <Volume2 size={16} />
-                Listen to Native Pronunciation
+                {isSpeaking ? 'Playing...' : 'Listen to Native Pronunciation'}
               </button>
+              {ttsWarning && (
+                <p className="practice__tts-warning">
+                  <AlertCircle size={14} />
+                  {ttsWarning}
+                </p>
+              )}
             </div>
 
             {/* Mic Button */}

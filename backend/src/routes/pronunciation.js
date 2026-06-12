@@ -41,6 +41,36 @@ const upload = multer({
 const sessions = [];
 
 /**
+ * POST /api/pronunciation/tts
+ * Text → speech via Edge TTS (Python AI service). Does not use Whisper.
+ */
+router.post('/tts', async (req, res, next) => {
+  try {
+    const { text, language = 'en-US' } = req.body;
+
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ success: false, error: 'Text is required' });
+    }
+
+    const aiResponse = await axios.post(
+      `${AI_SERVICE_URL}/api/tts`,
+      { text: String(text).trim(), language },
+      { responseType: 'arraybuffer', timeout: 30000 }
+    );
+
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(Buffer.from(aiResponse.data));
+  } catch (error) {
+    const detail = error.response?.data?.detail || error.message;
+    console.warn(`⚠️  TTS unavailable (${detail})`);
+    res.status(error.response?.status || 503).json({
+      success: false,
+      error: 'Text-to-speech service unavailable',
+    });
+  }
+});
+
+/**
  * POST /api/pronunciation/analyze
  * Upload audio + metadata → forward to FastAPI AI service → return results
  */

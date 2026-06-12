@@ -16,7 +16,8 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
@@ -58,6 +59,54 @@ class AnalysisResult(BaseModel):
     recognizedText: str
     language: str
     source: str  # "azure" or "mock"
+
+
+class TtsRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=500)
+    language: str = Field(default="en-US")
+
+
+# Neural voices for each app language (Edge TTS — free, high quality)
+PREFERRED_TTS_VOICES = {
+    "en-US": "en-US-JennyNeural",
+    "es-ES": "es-ES-ElviraNeural",
+    "fr-FR": "fr-FR-DeniseNeural",
+    "de-DE": "de-DE-KatjaNeural",
+    "it-IT": "it-IT-ElsaNeural",
+    "pt-BR": "pt-BR-FranciscaNeural",
+    "hi-IN": "hi-IN-SwaraNeural",
+    "ja-JP": "ja-JP-NanamiNeural",
+    "zh-CN": "zh-CN-XiaoxiaoNeural",
+}
+
+
+async def resolve_tts_voice(language: str) -> str:
+    """Pick the best Edge TTS neural voice for a BCP-47 language code."""
+    try:
+        import edge_tts
+    except ImportError:
+        raise HTTPException(status_code=503, detail="edge-tts not installed")
+
+    if language in PREFERRED_TTS_VOICES:
+        return PREFERRED_TTS_VOICES[language]
+
+    try:
+        voices = await edge_tts.list_voices()
+        lang_lower = language.lower()
+
+        for voice in voices:
+            if voice["Locale"].lower() == lang_lower and "Neural" in voice["ShortName"]:
+                return voice["ShortName"]
+
+        prefix = lang_lower.split("-")[0]
+        for voice in voices:
+            locale = voice["Locale"].lower()
+            if locale.startswith(prefix) and "Neural" in voice["ShortName"]:
+                return voice["ShortName"]
+    except Exception as e:
+        print(f"[TTS WARN] Could not fetch voice list: {e}")
+
+    raise HTTPException(status_code=404, detail=f"No TTS voice available for language: {language}")
 
 
 # ─── Health Check ─────────────────────────────────────────
@@ -142,49 +191,167 @@ async def analyze_with_whisper(audio_path: Path, language: str, reference_text: 
     base_lang = language.split('-')[0]
     
     # Load the 16kHz WAV file into a numpy array to bypass FFmpeg entirely
-    import scipy.io.wavfile as wav
-    import numpy as np
-    sample_rate, audio_data = wav.read(str(audio_path))
-    
-    # Ensure it's float32 normalized between -1.0 and 1.0 (Whisper requirement)
-    if audio_data.dtype == np.int16:
-        audio_data = audio_data.astype(np.float32) / 32768.0
+    try:
+        import scipy.io.wavfile as wav
+        import numpy as np
+        sample_rate, audio_data = wav.read(str(audio_path))
+        
+        # Ensure it's float32 normalized between -1.0 and 1.0 (Whisper requirement)
+        if audio_data.dtype == np.int16:
+            audio_data = audio_data.astype(np.float32) / 32768.0
+    except Exception as e:
+        print(f"[AI ERROR] Could not read WAV file with scipy: {e}")
+        # Fallback: let Whisper handle the file directly with FFmpeg
+        audio_data = str(audio_path)
         
     result = model.transcribe(audio_data, language=base_lang)
     recognized_text = result["text"].strip()
     
     print(f"[AI] Transcribed: {recognized_text}")
 
-    # Calculate custom scores using Levenshtein distance
+    # Calculate custom scores using improved algorithm
     import string
-    def clean_text(t):
-        return t.lower().translate(str.maketrans('', '', string.punctuation)).split()
-
-    ref_words = clean_text(reference_text)
-    rec_words = clean_text(recognized_text)
+    from difflib import SequenceMatcher
     
-    # Calculate Word Error Rate (WER)
-    distance = Levenshtein.distance(" ".join(ref_words), " ".join(rec_words))
-    max_len = max(len(" ".join(ref_words)), 1)
-    accuracy = max(0, 100 - int((distance / max_len) * 100))
+    def clean_text(t):
+        return t.lower().translate(str.maketrans('', '', string.punctuation))
 
-    # Fake a detailed word-by-word breakdown for the UI
+    ref_text_clean = clean_text(reference_text)
+    rec_text_clean = clean_text(recognized_text)
+    
+    ref_words = ref_text_clean.split()
+    rec_words = rec_text_clean.split()
+    
+    # Calculate Word Error Rate (WER) - proper implementation
+    # WER = (Substitutions + Deletions + Insertions) / Total Reference Words
+    def calculate_wer(reference, hypothesis):
+        """Calculate Word Error Rate using edit distance"""
+        ref = reference.split()
+        hyp = hypothesis.split()
+        
+        # Build edit distance matrix
+        d = [[0] * (len(hyp) + 1) for _ in range(len(ref) + 1)]
+        
+        for i in range(len(ref) + 1):
+            d[i][0] = i
+        for j in range(len(hyp) + 1):
+            d[0][j] = j
+            
+        for i in range(1, len(ref) + 1):
+            for j in range(1, len(hyp) + 1):
+                if ref[i-1] == hyp[j-1]:
+                    d[i][j] = d[i-1][j-1]
+                else:
+                    substitution = d[i-1][j-1] + 1
+                    insertion = d[i][j-1] + 1
+                    deletion = d[i-1][j] + 1
+                    d[i][j] = min(substitution, insertion, deletion)
+        
+        wer = d[len(ref)][len(hyp)] / max(len(ref), 1)
+        return min(1.0, wer)
+    
+    wer = calculate_wer(ref_text_clean, rec_text_clean)
+    pronunciation_accuracy = max(0, int((1 - wer) * 100))
+    
+    # Improved word-by-word analysis using sequence alignment
+    matcher = SequenceMatcher(None, ref_words, rec_words)
     words_breakdown = []
-    for ref_w in ref_words:
-        best_match_score = max([Levenshtein.ratio(ref_w, rec_w) for rec_w in rec_words] + [0])
+    
+    for ref_idx, ref_word in enumerate(ref_words):
+        # Find best matching word in recognized text
+        best_score = 0
+        best_match = None
+        
+        # Check words near the expected position (within ±2 positions)
+        search_start = max(0, ref_idx - 2)
+        search_end = min(len(rec_words), ref_idx + 3)
+        
+        for rec_idx in range(search_start, search_end):
+            if rec_idx < len(rec_words):
+                similarity = Levenshtein.ratio(ref_word, rec_words[rec_idx])
+                if similarity > best_score:
+                    best_score = similarity
+                    best_match = rec_words[rec_idx]
+        
+        # Also check exact matches anywhere in the text
+        if ref_word in rec_words:
+            best_score = max(best_score, 1.0)
+            best_match = ref_word
+        
+        word_score = int(best_score * 100)
+        
+        # Determine status based on score
+        if word_score >= 85:
+            status = "correct"
+        elif word_score >= 60:
+            status = "mispronounced"
+        else:
+            status = "missed"
+        
         words_breakdown.append(WordResult(
-            word=ref_w,
-            score=int(best_match_score * 100),
-            status="correct" if best_match_score > 0.8 else "mispronounced"
+            word=ref_word,
+            score=word_score,
+            status=status
         ))
+    
+    # Calculate overall scores
+    avg_word_score = sum(w.score for w in words_breakdown) / max(len(words_breakdown), 1)
+    
+    # Pronunciation Score: Based on WER and word-level accuracy
+    pronunciation_score = int((pronunciation_accuracy * 0.6) + (avg_word_score * 0.4))
+    
+    # Fluency Score: Based on transcription confidence and length match
+    length_ratio = len(rec_words) / max(len(ref_words), 1)
+    fluency_penalty = abs(1.0 - length_ratio) * 20  # Penalty for too fast/slow
+    fluency_score = max(0, min(100, int(pronunciation_score - fluency_penalty)))
+    
+    # Completeness Score: How much of the reference was captured
+    words_spoken = sum(1 for w in words_breakdown if w.status != "missed")
+    completeness_score = int((words_spoken / max(len(ref_words), 1)) * 100)
+    
+    # Overall Score: Weighted average
+    overall_score = int(
+        (pronunciation_score * 0.4) + 
+        (fluency_score * 0.3) + 
+        (completeness_score * 0.3)
+    )
+    
+    # Generate intelligent suggestions
+    suggestions = []
+    missed_words = [w.word for w in words_breakdown if w.status == "missed"]
+    mispronounced_words = [w.word for w in words_breakdown if w.status == "mispronounced"]
+    
+    if missed_words:
+        suggestions.append(f"You missed these words: {', '.join(missed_words[:3])}. Try speaking more clearly.")
+    
+    if mispronounced_words:
+        suggestions.append(f"Focus on pronouncing: {', '.join(mispronounced_words[:3])}. Listen to the native pronunciation.")
+    
+    if fluency_score < 70:
+        if length_ratio < 0.8:
+            suggestions.append("You spoke too quickly or skipped words. Try to speak at a natural pace.")
+        elif length_ratio > 1.2:
+            suggestions.append("You spoke too slowly or added extra words. Maintain a steady rhythm.")
+    
+    if overall_score >= 90:
+        suggestions.append("Excellent! Your pronunciation is very clear and accurate.")
+    elif overall_score >= 75:
+        suggestions.append("Good job! Keep practicing to improve further.")
+    elif overall_score < 60:
+        suggestions.append("Keep practicing! Listen to the native pronunciation and repeat several times.")
+    
+    if not suggestions:
+        suggestions.append("Practice makes perfect! Keep working on your pronunciation.")
+    
+    print(f"[AI] Scores - Overall: {overall_score}, Pronunciation: {pronunciation_score}, Fluency: {fluency_score}, Completeness: {completeness_score}")
 
     return AnalysisResult(
-        overallScore=accuracy,
-        pronunciationScore=accuracy,
-        fluencyScore=min(100, accuracy + 10),
-        completenessScore=min(100, int((len(rec_words) / max(len(ref_words), 1)) * 100)),
+        overallScore=overall_score,
+        pronunciationScore=pronunciation_score,
+        fluencyScore=fluency_score,
+        completenessScore=completeness_score,
         words=words_breakdown,
-        suggestions=["Speak slightly slower for better clarity."] if accuracy < 80 else ["Great job!"],
+        suggestions=suggestions,
         recognizedText=recognized_text,
         language=language,
         source="local_whisper"
@@ -247,6 +414,37 @@ def generate_mock_analysis(reference_text: str, language: str) -> AnalysisResult
         language=language,
         source="mock",
     )
+
+
+# ─── Text-to-Speech (Edge TTS) ───────────────────────────
+@app.post("/api/tts")
+async def text_to_speech(body: TtsRequest):
+    """
+    Convert text to natural speech using Microsoft Edge neural voices.
+    Separate from Whisper — this is text → audio only (Listen button).
+    """
+    try:
+        import edge_tts
+    except ImportError:
+        raise HTTPException(status_code=503, detail="edge-tts not installed. Run: pip install edge-tts")
+
+    text = body.text.strip()
+    
+    try:
+        voice = await resolve_tts_voice(body.language)
+        print(f"[TTS] language={body.language} voice={voice} text=\"{text[:60]}...\"")
+
+        communicate = edge_tts.Communicate(text, voice)
+
+        async def audio_stream():
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    yield chunk["data"]
+
+        return StreamingResponse(audio_stream(), media_type="audio/mpeg")
+    except Exception as e:
+        print(f"[TTS ERROR] {str(e)}")
+        raise HTTPException(status_code=503, detail=f"TTS service error: {str(e)}")
 
 
 # ─── Supported Languages ─────────────────────────────────
